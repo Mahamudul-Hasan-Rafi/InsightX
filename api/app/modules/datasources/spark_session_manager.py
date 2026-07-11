@@ -108,23 +108,8 @@ def _build_session(config: dict) -> Any:
         .appName("InsightX Delta Lakehouse")
         .config("spark.driver.host", driver_host)
         .config("spark.driver.bindAddress", "0.0.0.0")
-        # Pinned (not left dynamic): executors make an INBOUND connection back
-        # to the driver for heartbeats and block/shuffle transfer. Without a
-        # fixed port there's nothing stable to open a firewall rule for on the
-        # driver machine, so those inbound connections get silently blocked —
-        # surfacing as repeated "Remote RPC client disassociated" / lost
-        # executor errors. Safe to pin since this product only ever runs one
-        # Spark connection at a time (see the Data Source page's own copy).
         .config("spark.driver.port", "4040")
         .config("spark.driver.blockManager.port", "4041")
-        # Spark's web UI ALSO defaults to port 4040 — a separate config key
-        # (spark.ui.port) from spark.driver.port above, easy to miss. Left
-        # enabled, it grabs 4040 right after the driver's RPC endpoint does,
-        # falls back to 4041, and collides with the pinned blockManager port,
-        # bumping THAT to an unpredictable port too — silently defeating the
-        # whole point of pinning ports for a firewall rule. InsightX is a
-        # backend API, not an interactive notebook, so the UI is disabled
-        # outright rather than given yet another port to pin.
         .config("spark.ui.enabled", "false")
         .config("spark.driver.memory", "4g")
         .config("spark.executor.memory", "3g")

@@ -1,0 +1,47 @@
+trigger:
+  branches:
+    include:
+      - release/*
+
+variables:
+  - name: branchName
+    value: $[replace(variables['Build.SourceBranch'], 'refs/heads/', '')]
+
+stages:
+  - stage: Deploy
+    jobs:
+      - job: DeployToDev
+        pool:
+          name: 'default'
+
+        steps:
+          - task: InstallSSHKey@0
+            inputs:
+              sshKeySecureFile: 'id_rsa'
+              hostName: '10.11.200.99'
+
+          - script: |
+              mkdir -p ~/.ssh
+              ssh-keyscan -H 10.11.200.99 >> ~/.ssh/known_hosts
+
+              ssh era@10.11.200.99 bash <<EOF
+              set -euo pipefail
+              cd /home/era/insightX/AI_Reporting/InsightX
+
+              hostname
+              pwd
+              whoami
+
+              git remote show origin
+              git fetch --all
+              git checkout $(branchName)
+              git reset --hard origin/$(branchName)
+              git clean -fd
+
+              docker compose down --remove-orphans
+              docker compose build --pull
+              docker compose up -d
+              docker image prune -af
+              EOF
+
+            displayName: Deploy via SSH

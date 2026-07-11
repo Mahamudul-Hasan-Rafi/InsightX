@@ -1,0 +1,13 @@
+.env
+.env.*
+*.pyc
+__pycache__/
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+tests/
+.git/
+.gitignore
+insightx_dev.db
+secure-uploads/

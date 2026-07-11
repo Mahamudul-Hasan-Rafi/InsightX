@@ -1,0 +1,73 @@
+# docker-compose.yml
+#
+# Services:
+#   backend   — FastAPI on :8091
+#   frontend  — Next.js on :5500
+#
+# External dependencies (NOT managed here):
+#   PostgreSQL  — configured via DATABASE_URL in api/.env
+#   Keycloak    — configured via KEYCLOAK_* in api/.env
+#
+# SETUP:
+#   1. Fill in api/.env (copy from api/.env.example and edit)
+#   2. docker compose up --build
+
+services:
+
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context:    ./api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+    # Load all backend secrets and config directly from api/.env.
+    # This avoids the need for a root-level .env for Docker Compose substitution.
+    env_file: ./api/.env
+
+    environment:
+      # Docker-specific override: use the named volume path, not the local dev path
+      # from api/.env (which defaults to ./secure-uploads).
+      SECURE_FILES_DIR: /app/secure-uploads
+
+    volumes:
+      - secure_uploads:/app/secure-uploads
+    ports:
+      - "8095:8091"
+
+  # ── Next.js frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context:    ./web
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_BASE_URL — URL the *browser* uses to reach the API.
+        # Point at the Next.js server (port 5500) so /api/* goes through the
+        # built-in proxy → no cross-origin/CORS issues.
+        # For LAN/remote access set NEXT_PUBLIC_BASE_URL in a root .env, e.g.:
+        #   NEXT_PUBLIC_BASE_URL=http://10.11.200.109:5500
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-http://10.11.200.99:5500}
+
+        # Keycloak values — fall back to the known server addresses if no root .env.
+        NEXT_PUBLIC_KEYCLOAK_URL:       ${KEYCLOAK_URL:-http://10.11.200.99:8083}
+        NEXT_PUBLIC_KEYCLOAK_REALM:     ${KEYCLOAK_REALM:-InsightX}
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-InsightX}
+
+        # Internal Docker service URL used by the Next.js /api/* rewrite proxy.
+        # Never sent to the browser — server-side only.
+        BACKEND_URL: http://backend:8091
+
+    environment:
+      # Also set at runtime so the proxy works if the image is reused without rebuild.
+      BACKEND_URL: http://backend:8091
+
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5500:5500"
+
+# ── Volumes ────────────────────────────────────────────────────────────────
+volumes:
+  secure_uploads:
+    driver: local
